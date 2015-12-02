@@ -2,111 +2,120 @@
 // var parseJSON = JSON.parse;
 
 // but you're not, so you'll write it from scratch:
-var parseJSON = function(json) {
-  // your code goes here
-	json = json.replace(/\s/g, "");
-    
-    function firstAndLastValue(first, last) {
-        return function(str) {
-            return str[0] === first && str[str.length - 1] === last;
-        } ;
-    }
-    
-    var hasDoubleQuotes = firstAndLastValue('"', '"');
-    var hasSingleQuotes = firstAndLastValue("'", "'");
-    
-    var isString = function (str) {
-      return (hasSingleQuotes(str) || hasDoubleQuotes(str));
-    };
-    
-    
-    
-    
-    var isObject = firstAndLastValue('{', '}');
-    var isArray = firstAndLastValue('[', ']');
-    
-    
-    
-    
-    
-    var removeExtraChar = function(str) {
-      return str.substr(1).slice(0, str.length - 2);  
-    };
-    
-    
-    var splitByColon = function(str) {
-        //str = str.replace(" ", "");
-        //console.log(str)
-        for(var i = 0; i < str.length; i++) {
-            if(str[i] === ":" && str[i-1] === '"' && str[i+1] === "{") {
-                return str.split(/:(?={)/g);
-            }
-            else if(str[i] === ":" && str[i-1] === '"'  && str[i+1] === '"') {
-                return str.split(":");
-            }
-            else if(str[i] === ":" && str[i-1] === '"') {
-                return str.split(":");
-            }
-            
-            
-        }    
-    }
-    
-    
-    var parseJSONStrings = function(str) {
-        
-    if(isObject(str)) {
-        
-        var newObj = {};
-        var parsedArr = [];
-        var splitByComma = removeExtraChar(str).split(",");
-        //console.log(splitByComma)
-        if(str === '{}') {
-            return newObj;
-        }
-        
-        splitByComma.forEach(function(item) {
-            //item = item.replace(" ", "");
-            //console.log(item)
-          
-          var splittedByColon = splitByColon(item);
-            
-          
-          
-          newObj[parseJSONStrings(splittedByColon[0])] = parseJSONStrings(splittedByColon[1]);
-            
-             
-        });
-        
-        return newObj;
-    }    
-    
-    else if (isString(str)) {
-        //console.log(str)
-      
-      
-      return removeExtraChar(str);    
-    }
-    
-    else if(str === 'true') {
-        return true;
-    }    
-    else if(str === "false") {
-        return false;
-    } 
-    else if(str === "null") {
-        return null;
-    }
-    
-        
-    
-    }
-    
-  
-    return parseJSONStrings(json)
+var parseJSON = function (json) {
+	// your code goes here
 
-	
-	
+
+	function findTypeOfConstructor(first, last) {
+		return function (str) {
+			return str[0] === first && str[str.length - 1] === last;
+		};
+	}
+
+	var isString = function (str) {
+		try {
+			eval(str);
+		} catch (e) {
+			if (e instanceof SyntaxError) {
+				throw new SyntaxError('Invalid JSON Input');
+			}
+		}
+		return findTypeOfConstructor('"', '"')(str);
+	};
+	var isObject = findTypeOfConstructor('{', '}');
+	var isArray = findTypeOfConstructor('[', ']');
+	var isNumber = function (str) {
+		return Number(str) + '' === str;
+	};
+	var removeExtraChar = function (str) {
+		return str.substr(1).slice(0, str.length - 2);
+	};
+
+
+	var splitBy = function (char) {
+		return function (str) {
+			var result = [];
+			var currentStr = '';
+			var openCurlyBracket = 0;
+			var closedCurlybracket = true;
+			var openBracket = 0;
+			var closedBracket = true;
+			var doubleQuoteClosed = true;
+
+
+			for (var i = 0; i < str.length; i++) {
+				var currentChar = str[i];
+
+				if (currentChar === '{') {
+					openCurlyBracket++;
+					closedCurlybracket = false;
+					currentStr += currentChar;
+				} else if (currentChar === '}') {
+					openCurlyBracket--;
+					currentStr += currentChar;
+					if (openCurlyBracket === 0) {
+						closedCurlybracket = true;
+					}
+				} else if (currentChar === '[') {
+					openBracket++;
+					closedBracket = false;
+					currentStr += currentChar;
+				} else if (currentChar === ']') {
+					openBracket--;
+					currentStr += currentChar;
+					if (openBracket === 0) {
+						closedBracket = true;
+					}
+				} else if (currentChar === '"') {
+					doubleQuoteClosed = !doubleQuoteClosed;
+					currentStr += currentChar;
+				} else if (currentChar === char && doubleQuoteClosed && closedCurlybracket && closedBracket) {
+					result.push(currentStr.trim());
+					currentStr = '';
+				} else {
+					currentStr += currentChar;
+				}
+
+			}
+			
+			if (currentStr !== "") {
+				result.push(currentStr.trim());
+			}
+
+			return result;
+		};
+
+	};
+
+	var splitByColon = splitBy(':');
+	var splitByComma = splitBy(',');
+
+	var parseStrings = function (str) {
+		str = str.trim();
+		if (isArray(str)) {
+			return splitByComma(removeExtraChar(str)).map(parseStrings);
+		} else if (isObject(str)) {
+			var newObj = {};
+			var splittedByComma = splitByComma(removeExtraChar(str));
+
+			splittedByComma.forEach(function (values) {
+				var splittedByColon = splitByColon(values);
+				newObj[parseStrings(splittedByColon[0])] = parseStrings(splittedByColon[1]);
+			});
+			return newObj;
+		} else if (isNumber(str)) {
+			return Number(str);
+		} else if (isString(str)) {
+			return removeExtraChar(str).replace(/([\\]{1})([\\\"]{1})/g, '$2');
+		} else if (str === 'true') {
+			return true;
+		} else if (str === "false") {
+			return false;
+		} else if (str === "null") {
+			return null;
+		}
+	};
+	return parseStrings(json);
 };
 
 parseableStrings = [
